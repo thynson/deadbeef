@@ -6,12 +6,12 @@
     modify it under the terms of the GNU General Public License
     as published by the Free Software Foundation; either version 2
     of the License, or (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -44,10 +44,10 @@ static char lfm_sess[33];
 static char lfm_nowplaying_url[256];
 static char lfm_submission_url[256];
 
-static uintptr_t lfm_mutex;
-static uintptr_t lfm_cond;
-static int lfm_stopthread;
-static intptr_t lfm_tid;
+static uintptr_t lfm_mutex = 0;
+static uintptr_t lfm_cond = 0;
+static int lfm_stopthread = 0;
+static intptr_t lfm_tid = 0;
 
 DB_plugin_t *
 lastfm_load (DB_functions_t *api) {
@@ -822,10 +822,9 @@ lfm_message (uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2) {
 
 static int
 lastfm_start (void) {
-    lfm_sess[0] = 0;
-    lfm_mutex = 0;
-    lfm_cond = 9;
-    lfm_tid = 0;
+    if (lfm_mutex) {
+        return;
+    }
     lfm_stopthread = 0;
     lfm_mutex = deadbeef->mutex_create_nonrecursive ();
     lfm_cond = deadbeef->cond_create ();
@@ -933,7 +932,7 @@ static DB_misc_t plugin = {
     .plugin.type = DB_PLUGIN_MISC,
     .plugin.name = "last.fm scrobbler",
     .plugin.descr = "Sends played songs information to your last.fm account, or other service that use AudioScrobbler protocol",
-    .plugin.copyright = 
+    .plugin.copyright =
         "Copyright (C) 2009-2011 Alexey Yakovenko <waker@users.sourceforge.net>\n"
         "\n"
         "This program is free software; you can redistribute it and/or\n"
