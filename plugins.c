@@ -6,12 +6,12 @@
     modify it under the terms of the GNU General Public License
     as published by the Free Software Foundation; either version 2
     of the License, or (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -779,6 +779,14 @@ plug_load_all (void) {
 
     // load from HOME 1st, than replace from installdir if needed
     const char *plugins_dirs[] = { xdg_plugin_dir, dirname, NULL };
+
+    // If xdg_plugin_dir and dirname is the same, we should avoid each plugin
+    // to be load twice.
+    // XXX: Here absolute path is assumed, however if dirname is a relative
+    // path it won't work.
+    if (strcmp(xdg_plugin_dir, dirname) == 0) {
+        plugins_dirs[1] = NULL;
+    }
 #else
     const char *plugins_dirs[] = { dirname, NULL };
 #endif
