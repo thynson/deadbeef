@@ -237,6 +237,7 @@ static int hidden = 0;
 
 gboolean
 w_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
+#if !GTK_CHECK_VERSION(3,0,0)
     if (hidden && user_data == current_widget) {
         GdkColor clr = {
             .red = 0x2d00,
@@ -256,6 +257,10 @@ w_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
     }
 
     return FALSE;
+#else
+    /* FIXME */
+    return TRUE;
+#endif
 }
 
 static char paste_buffer[1000];
@@ -469,7 +474,9 @@ w_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_da
 static void
 w_override_signals (GtkWidget *widget, gpointer user_data) {
     g_signal_connect ((gpointer) widget, "button_press_event", G_CALLBACK (w_button_press_event), user_data);
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) widget, "expose_event", G_CALLBACK (w_expose_event), user_data);
+#endif
     if (GTK_IS_CONTAINER (widget)) {
         gtk_container_forall (GTK_CONTAINER (widget), w_override_signals, user_data);
     }
@@ -557,6 +564,7 @@ w_container_remove (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child) {
 
 gboolean
 w_placeholder_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
+#if !GTK_CHECK_VERSION(3,0,0)
     cairo_t *cr = gdk_cairo_create (widget->window);
     cairo_set_source_rgb (cr, 255, 0, 0);
     cairo_surface_t *checker;
@@ -586,6 +594,9 @@ w_placeholder_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer u
     cairo_surface_destroy (checker);
     cairo_destroy (cr);
     return FALSE;
+#else
+    return FALSE;
+#endif
 }
 
 ddb_gtkui_widget_t *
@@ -594,8 +605,13 @@ w_placeholder_create (void) {
     memset (w, 0, sizeof (w_placeholder_t));
     w->base.widget = gtk_drawing_area_new ();
     gtk_widget_set_events (w->base.widget, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_placeholder_expose_event), w);
+#else
+    //g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK(w_draw_event), w);
+    //g_signal_connect_after ((gpointer) w->base.widget "draw", G_CALLBACK(w_placeholder_event), w);
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
     return (ddb_gtkui_widget_t*)w;
 }
@@ -643,7 +659,10 @@ w_vsplitter_create (void) {
     ddb_gtkui_widget_t *ph1, *ph2;
     ph1 = w_create ("placeholder");
     ph2 = w_create ("placeholder");
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
+#else
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
     w_append ((ddb_gtkui_widget_t*)w, ph1);
@@ -666,7 +685,10 @@ w_hsplitter_create (void) {
     ddb_gtkui_widget_t *ph1, *ph2;
     ph1 = w_create ("placeholder");
     ph2 = w_create ("placeholder");
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
+#else
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
     w_append ((ddb_gtkui_widget_t*)w, ph1);
@@ -703,8 +725,7 @@ on_add_tab_activate (GtkMenuItem *menuitem, gpointer user_data) {
     int i = 0;
     for (ddb_gtkui_widget_t *c = w->base.children; c; c = c->next, i++);
     w->clicked_page = i-1;
-    gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
-
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
 }
 
 static void
@@ -755,7 +776,7 @@ on_move_tab_left_activate (GtkMenuItem *menuitem, gpointer user_data) {
             gtk_widget_show (newchild->widget);
 
             gtk_notebook_insert_page (GTK_NOTEBOOK (w->base.widget), newchild->widget, eventbox, w->clicked_page-1);
-            gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page-1);
+            gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page-1);
             w->clicked_page--;
             break;
         }
@@ -772,9 +793,9 @@ on_move_tab_right_activate (GtkMenuItem *menuitem, gpointer user_data) {
     if (w->clicked_page >= i)
         return;
 
-    gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
     on_move_tab_left_activate (menuitem, user_data);
-    gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
 }
 
 static gboolean
@@ -815,7 +836,7 @@ tab_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_
         gtk_container_add (GTK_CONTAINER (menu), item);
 
         w->clicked_page = gtk_notebook_page_num (GTK_NOTEBOOK (w->base.widget), user_data);
-        gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
+        gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
 
         gtk_menu_popup (GTK_MENU (menu), NULL, NULL, NULL, widget, 0, gtk_get_current_event_time());
         return TRUE;
@@ -862,7 +883,7 @@ w_tabs_replace (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child, ddb_gtkui_w
             gtk_container_add (GTK_CONTAINER (eventbox), label);
             gtk_widget_show (newchild->widget);
             int pos = gtk_notebook_insert_page (GTK_NOTEBOOK (cont->widget), newchild->widget, eventbox, ntab);
-            gtk_notebook_set_page (GTK_NOTEBOOK (cont->widget), pos);
+            gtk_notebook_set_current_page (GTK_NOTEBOOK (cont->widget), pos);
             break;
         }
     }
@@ -894,7 +915,10 @@ w_tabs_create (void) {
     ph2 = w_create ("placeholder");
     ph3 = w_create ("placeholder");
 
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
+#else
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
     w_append ((ddb_gtkui_widget_t*)w, ph1);
@@ -1264,6 +1288,7 @@ coverart_avail_callback (void *user_data) {
 
 static gboolean
 coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
+#if !GTK_CHECK_VERSION(3,0,0)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (!it) {
         return FALSE;
@@ -1284,6 +1309,9 @@ coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     }
     deadbeef->pl_item_unref (it);
     return TRUE;
+#else
+    return FALSE;
+#endif
 }
 
 static gboolean
