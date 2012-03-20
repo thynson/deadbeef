@@ -6,12 +6,12 @@
     modify it under the terms of the GNU General Public License
     as published by the Free Software Foundation; either version 2
     of the License, or (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -435,7 +435,7 @@ w_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_da
         g_signal_connect ((gpointer) item, "activate",
                 G_CALLBACK (on_delete_activate),
                 NULL);
-        
+
         item = gtk_menu_item_new_with_mnemonic (_("Cut"));
         gtk_widget_show (item);
         gtk_container_add (GTK_CONTAINER (menu), item);
@@ -788,7 +788,7 @@ tab_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_
         GtkWidget *menu;
         GtkWidget *item;
         menu = gtk_menu_new ();
- 
+
         item = gtk_menu_item_new_with_mnemonic (_("Move tab left"));
         gtk_widget_show (item);
         gtk_container_add (GTK_CONTAINER (menu), item);
@@ -913,7 +913,7 @@ w_box_create (void) {
     w_box_t *w = malloc (sizeof (w_box_t));
     memset (w, 0, sizeof (w_box_t));
     w->base.widget = gtk_vbox_new (FALSE, 0);
-    w->base.append = w_container_add; 
+    w->base.append = w_container_add;
     w->base.remove = w_container_remove;
 
     return (ddb_gtkui_widget_t*)w;
@@ -1118,8 +1118,13 @@ w_tabbed_playlist_create (void) {
 
     gtk_box_pack_start (GTK_BOX (vbox), tabstrip, FALSE, TRUE, 0);
     gtk_widget_set_size_request (tabstrip, -1, 24);
+#if GTK_CHECK_VERSION(3,0,0)
+    gtk_widget_set_can_focus (tabstrip, TRUE);
+    gtk_widget_set_can_default (tabstrip, TRUE);
+#else
     GTK_WIDGET_UNSET_FLAGS (tabstrip, GTK_CAN_FOCUS);
     GTK_WIDGET_UNSET_FLAGS (tabstrip, GTK_CAN_DEFAULT);
+#endif
 
     gtk_box_pack_start (GTK_BOX (vbox), frame, TRUE, TRUE, 0);
     gtk_container_set_border_width (GTK_CONTAINER (frame), 1);
