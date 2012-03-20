@@ -235,9 +235,9 @@ w_create_from_string (const char *s, ddb_gtkui_widget_t **parent) {
 static ddb_gtkui_widget_t *current_widget;
 static int hidden = 0;
 
+#if !GTK_CHECK_VERSION(3,0,0)
 gboolean
 w_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
-#if !GTK_CHECK_VERSION(3,0,0)
     if (hidden && user_data == current_widget) {
         GdkColor clr = {
             .red = 0x2d00,
@@ -257,11 +257,27 @@ w_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
     }
 
     return FALSE;
-#else
-    /* FIXME */
-    return TRUE;
-#endif
 }
+#else
+static gboolean
+w_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+    if (hidden && user_data == current_widget) {
+        GdkRGBA clr = {
+            .red = 0.17,
+            .green = 0.0,
+            .blue = 0.83,
+            .alpha = 0
+        };
+        GtkAllocation allocation;
+        gtk_widget_get_allocation(widget, &allocation);
+        cairo_rectangle (cr, 0, 0, allocation.width, allocation.height);
+
+    }
+    return FALSE;
+}
+
+#endif
+
 
 static char paste_buffer[1000];
 
@@ -476,6 +492,8 @@ w_override_signals (GtkWidget *widget, gpointer user_data) {
     g_signal_connect ((gpointer) widget, "button_press_event", G_CALLBACK (w_button_press_event), user_data);
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) widget, "expose_event", G_CALLBACK (w_expose_event), user_data);
+#else
+    g_signal_connect ((gpointer) widget, "draw", G_CALLBACK (w_draw_event), user_data);
 #endif
     if (GTK_IS_CONTAINER (widget)) {
         gtk_container_forall (GTK_CONTAINER (widget), w_override_signals, user_data);
@@ -562,9 +580,9 @@ w_container_remove (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child) {
 
 ////// placeholder widget
 
+#if !GTK_CHECK_VERSION(3,0,0)
 gboolean
 w_placeholder_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
-#if !GTK_CHECK_VERSION(3,0,0)
     cairo_t *cr = gdk_cairo_create (widget->window);
     cairo_set_source_rgb (cr, 255, 0, 0);
     cairo_surface_t *checker;
@@ -594,10 +612,43 @@ w_placeholder_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer u
     cairo_surface_destroy (checker);
     cairo_destroy (cr);
     return FALSE;
-#else
-    return FALSE;
-#endif
 }
+#else
+static gboolean
+w_placeholder_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+    GtkAllocation allocation;
+
+    gtk_widget_get_allocation (widget, &allocation);
+    cairo_set_source_rgb (cr, 255, 0, 0);
+    cairo_surface_t *checker;
+    cairo_t *cr2;
+
+    checker = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 12, 12);
+    cr2 = cairo_create (checker);
+
+    cairo_set_source_rgb (cr2, 0.5, 0.5 ,0.5);
+    cairo_paint (cr2);
+    cairo_set_source_rgb (cr2, 0, 0, 0);
+    cairo_move_to (cr2, 0, 0);
+    cairo_line_to (cr2, 12, 12);
+    cairo_move_to (cr2, 1, 12);
+    cairo_line_to (cr2, 12, 1);
+    cairo_set_line_width (cr2, 1);
+    cairo_set_antialias (cr2, CAIRO_ANTIALIAS_NONE);
+    cairo_stroke (cr2);
+    cairo_fill (cr2);
+    cairo_destroy (cr2);
+
+    cairo_set_source_surface (cr, checker, 0, 0);
+    cairo_pattern_t *pt = cairo_get_source(cr);
+    cairo_pattern_set_extend (pt, CAIRO_EXTEND_REPEAT);
+    cairo_rectangle (cr, 0, 0, allocation.width, allocation.height);
+    cairo_paint (cr);
+    cairo_surface_destroy (checker);
+    return FALSE;
+}
+
+#endif
 
 ddb_gtkui_widget_t *
 w_placeholder_create (void) {
@@ -609,8 +660,8 @@ w_placeholder_create (void) {
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_placeholder_expose_event), w);
 #else
-    //g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK(w_draw_event), w);
-    //g_signal_connect_after ((gpointer) w->base.widget "draw", G_CALLBACK(w_placeholder_event), w);
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
+    g_signal_connect_after ((gpointer) w->base.widget, "draw", G_CALLBACK (w_placeholder_draw_event), w);
 #endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
     return (ddb_gtkui_widget_t*)w;
@@ -662,6 +713,7 @@ w_vsplitter_create (void) {
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
 #else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
 #endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
@@ -688,6 +740,7 @@ w_hsplitter_create (void) {
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
 #else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
 #endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
@@ -918,6 +971,7 @@ w_tabs_create (void) {
 #if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
 #else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
 #endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
