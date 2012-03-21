@@ -1364,6 +1364,34 @@ coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     deadbeef->pl_item_unref (it);
     return TRUE;
 }
+#else
+
+static gboolean
+coverart_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
+    GtkAllocation allocation;
+    if (!it) {
+        return FALSE;
+    }
+    gtk_widget_get_allocation (widget, &allocation);
+    const char *album = deadbeef->pl_find_meta (it, "album");
+    const char *artist = deadbeef->pl_find_meta (it, "artist");
+
+    if (!album || !*album) {
+        album = deadbeef->pl_find_meta(it, "title");
+    }
+
+    GdkPixbuf *pixbuf = get_cover_art_callb (deadbeef->pl_find_meta ((it), ":URI"), artist, album, min(allocation.width, allocation.height), coverart_avail_callback, user_data);
+    if (pixbuf) {
+        int pw = gdk_pixbuf_get_width (pixbuf);
+        int ph = gdk_pixbuf_get_height (pixbuf);
+        gdk_cairo_set_source_pixbuf (cr, pixbuf, 0, 0);
+        cairo_paint (cr);
+        g_object_unref (pixbuf);
+    }
+    deadbeef->pl_item_unref (it);
+    return TRUE;
+}
 #endif
 
 static gboolean
@@ -1406,6 +1434,8 @@ w_coverart_create (void) {
 #if !GTK_CHECK_VERSION(3,0,0)
     // Hotfix for porting to gtk3
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (coverart_expose_event), w);
+#else
+    g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (coverart_draw_event), w);
 #endif
     w_override_signals (w->base.widget, w);
     return (ddb_gtkui_widget_t *)w;
