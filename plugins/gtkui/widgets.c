@@ -1340,9 +1340,9 @@ coverart_avail_callback (void *user_data) {
     gtk_widget_queue_draw (w->drawarea);
 }
 
+#if !GTK_CHECK_VERSION(3,0,0)
 static gboolean
 coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
-#if !GTK_CHECK_VERSION(3,0,0)
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
     if (!it) {
         return FALSE;
@@ -1363,10 +1363,8 @@ coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     }
     deadbeef->pl_item_unref (it);
     return TRUE;
-#else
-    return FALSE;
-#endif
 }
+#endif
 
 static gboolean
 coverart_redraw_cb (void *user_data) {
@@ -1405,7 +1403,10 @@ w_coverart_create (void) {
     w->drawarea = gtk_drawing_area_new ();
     gtk_widget_show (w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
+#if !GTK_CHECK_VERSION(3,0,0)
+    // Hotfix for porting to gtk3
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (coverart_expose_event), w);
+#endif
     w_override_signals (w->base.widget, w);
     return (ddb_gtkui_widget_t *)w;
 }
