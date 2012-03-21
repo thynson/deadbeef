@@ -223,6 +223,19 @@ w_create_from_string (const char *s, ddb_gtkui_widget_t **parent) {
         }
     }
 
+    back = s;
+    s = gettoken (s, t);
+    if (!strcmp (t, "(")) {
+        if (w->load) {
+            s = gettoken (s, t);
+            w->load (w,t);
+            s = gettoken (s, t); // ")"
+        }
+    }
+    else {
+        s = back;
+    }
+
     if (*parent) {
         w_append (*parent, w);
     }
@@ -283,12 +296,23 @@ static char paste_buffer[1000];
 
 static void
 save_widget_to_string (char *str, ddb_gtkui_widget_t *w) {
+    char buffer[MAX_TOKEN];
     strcat (str, w->type);
     strcat (str, "{");
     for (ddb_gtkui_widget_t *c = w->children; c; c = c->next) {
         save_widget_to_string (str, c);
     }
-    strcat (str, "} ");
+    strcat (str, "}");
+    if (w->save) {
+        w->save (w, buffer, MAX_TOKEN);
+        if (strcmp (buffer,"")) {
+            strcat (str, "(");
+            strcat (str, buffer);
+            strcat (str, ")");
+        }
+    }
+    strcat (str, " ");
+
 }
 
 void
@@ -698,6 +722,17 @@ w_splitter_replace (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child, ddb_gtk
     }
 }
 
+void w_splitter_load (struct ddb_gtkui_widget_s *w, const char *str) {
+    int pos;
+    sscanf (str, "%u", &pos);
+    gtk_paned_set_position (GTK_PANED (w->widget), pos);
+}
+
+void w_splitter_save (struct ddb_gtkui_widget_s *w, char *str, int max_len) {
+    int pos = gtk_paned_get_position (GTK_PANED (w->widget));
+    snprintf (str, max_len-1, "%u", pos);
+}
+
 ddb_gtkui_widget_t *
 w_vsplitter_create (void) {
     w_splitter_t *w = malloc (sizeof (w_splitter_t));
@@ -706,6 +741,8 @@ w_vsplitter_create (void) {
     w->base.append = w_container_add;
     w->base.remove = w_container_remove;
     w->base.replace = w_splitter_replace;
+    w->base.load = w_splitter_load;
+    w->base.save = w_splitter_save;
 
     ddb_gtkui_widget_t *ph1, *ph2;
     ph1 = w_create ("placeholder");
@@ -733,6 +770,8 @@ w_hsplitter_create (void) {
     w->base.append = w_container_add;
     w->base.remove = w_container_remove;
     w->base.replace = w_splitter_replace;
+    w->base.save = w_splitter_save;
+    w->base.load = w_splitter_load;
 
     ddb_gtkui_widget_t *ph1, *ph2;
     ph1 = w_create ("placeholder");
@@ -953,6 +992,17 @@ w_tabs_initmenu (struct ddb_gtkui_widget_s *w, GtkWidget *menu) {
             w);
 }
 
+void w_tabs_load (struct ddb_gtkui_widget_s *w, const char *str) {
+    int page;
+    sscanf (str, "%u", &page);
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->widget), page);
+}
+
+void w_tabs_save (struct ddb_gtkui_widget_s *w, char *str, int max_len) {
+    int page = gtk_notebook_get_current_page (GTK_NOTEBOOK (w->widget));
+    snprintf (str, max_len-1, "%u", page);
+}
+
 ddb_gtkui_widget_t *
 w_tabs_create (void) {
     w_tabs_t *w = malloc (sizeof (w_tabs_t));
@@ -962,6 +1012,8 @@ w_tabs_create (void) {
     w->base.remove = w_container_remove;
     w->base.replace = w_tabs_replace;
     w->base.initmenu = w_tabs_initmenu;
+    w->base.load = w_tabs_load;
+    w->base.save = w_tabs_save;
 
     ddb_gtkui_widget_t *ph1, *ph2, *ph3;
     ph1 = w_create ("placeholder");
@@ -1334,6 +1386,9 @@ w_selproperties_create (void) {
 }
 
 ///// cover art display
+
+DB_playItem_t *last_it=NULL;
+
 void
 coverart_avail_callback (void *user_data) {
     w_coverart_t *w = user_data;
@@ -1343,7 +1398,8 @@ coverart_avail_callback (void *user_data) {
 #if !GTK_CHECK_VERSION(3,0,0)
 static gboolean
 coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
-    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
+    //DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
+    DB_playItem_t *it=last_it;
     if (!it) {
         return FALSE;
     }
@@ -1361,7 +1417,7 @@ coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
         gdk_draw_pixbuf (widget->window, widget->style->white_gc, pixbuf, 0, 0, widget->allocation.width/2-pw/2, widget->allocation.height/2-ph/2, pw, ph, GDK_RGB_DITHER_NONE, 0, 0);
         g_object_unref (pixbuf);
     }
-    deadbeef->pl_item_unref (it);
+    //deadbeef->pl_item_unref (it);
     return TRUE;
 }
 #else
@@ -1409,12 +1465,42 @@ coverart_message (ddb_gtkui_widget_t *w, uint32_t id, uintptr_t ctx, uint32_t p1
         {
             ddb_event_track_t *ev = (ddb_event_track_t *)ctx;
             DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
-            if (it == ev->track) {
-                g_idle_add (coverart_redraw_cb, w);
-            }
             if (it) {
+                if (it == ev->track) {
+                    if (last_it) {
+                        deadbeef->pl_item_unref (last_it);
+                    }
+                    last_it = it;
+                    deadbeef->pl_item_ref (last_it);
+                }
+                g_idle_add (coverart_redraw_cb, w);
                 deadbeef->pl_item_unref (it);
             }
+        }
+        break;
+    case DB_EV_SELCHANGED:
+    case DB_EV_PLAYLISTSWITCHED:
+        {
+            ddb_playlist_t *plt = deadbeef->plt_get_curr ();
+            if (!plt) {
+                break;
+            }
+            DB_playItem_t *it = deadbeef->plt_get_item_for_idx (
+                    plt,
+                    deadbeef->plt_get_cursor (plt, PL_MAIN),
+                    PL_MAIN
+                    );
+            if (last_it) {
+                deadbeef->pl_item_unref (last_it);
+                last_it = NULL;
+            }
+            if (it) {
+                last_it = it;
+                deadbeef->pl_item_ref (last_it);
+                deadbeef->pl_item_unref (it);
+            }
+            g_idle_add (coverart_redraw_cb, w);
+            deadbeef->plt_unref (plt);
         }
         break;
     }
