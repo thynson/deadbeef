@@ -39,6 +39,7 @@ full list of dependencies:
     ffmpeg (libavcodec + libavformat): for ffmpeg plugin
     xlib: for global hotkeys
     dbus: for notification daemon support (OSD current song notifications)
+    dbus-glib: for media key support
     pulseaudio: for PulseAudio output plugin
     faad2: for AAC plugin
     zlib: for Audio Overload plugin (psf, psf2, etc), GME (for vgz)
