@@ -1,9 +1,8 @@
 if HAVE_MEDIA_KEY
 pkglib_LTLIBRARIES = media_key.la
 media_key_la_SOURCES = media_key.c marshal.h marshal.c
-marshal.h: marshal.list
+marshal.h marshal.c: marshal.list
 	$(AM_V_GEN)glib-genmarshal --prefix=marshal --header $< > $@
-marshal.c: marshal.list
 	$(AM_V_GEN)glib-genmarshal --prefix=marshal --body $< > $@
 
 media_key_la_LDFLAGS = -module

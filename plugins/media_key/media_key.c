@@ -30,14 +30,37 @@
 static DB_functions_t *deadbeef = NULL;
 static uintptr_t mk_mutex;
 static uintptr_t mk_cond;
-static int mk_state;
+static int mk_state = DB_EV_STOP;
 
+static int
+on_message (uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2) {
+    fprintf (stderr, "%d\n", id);
+    deadbeef->mutex_lock (mk_mutex);
+    switch (id) {
+    case DB_EV_PLAY_CURRENT:
+    case DB_EV_PLAY_NUM:
+    case DB_EV_PLAY_RANDOM:
+        mk_state = DB_EV_PLAY_CURRENT;
+        break;
+    case DB_EV_STOP:
+        mk_state = DB_EV_STOP;
+        break;
+    default:
+        break;
+    }
+    deadbeef->mutex_unlock (mk_mutex);
+    return 0;
+}
 
 static void
 media_key_pressed (DBusGProxy *proxy, const char *value1, const char *value2) {
     fprintf (stderr, "%s\n", value2);
+    deadbeef->mutex_lock (mk_mutex);
     if (strcmp (value2, "Play") == 0) {
-        deadbeef->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
+        if (mk_state == DB_EV_STOP)
+            deadbeef->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
+        else
+            deadbeef->sendmessage(DB_EV_TOGGLE_PAUSE, 0, 0, 0);
     }
     else if (strcmp (value2, "Stop") == 0) {
         deadbeef->sendmessage(DB_EV_STOP, 0, 0, 0);
@@ -48,6 +71,7 @@ media_key_pressed (DBusGProxy *proxy, const char *value1, const char *value2) {
     else if (strcmp (value2, "Previous") == 0) {
         deadbeef->sendmessage(DB_EV_PREV, 0, 0, 0);
     }
+    deadbeef->mutex_unlock (mk_mutex);
 }
 
 static void
@@ -59,7 +83,6 @@ media_key_thread (void *ctx) {
 
     g_type_init ();
 
-    //deadbeef->mutex_lock(mk_mutex);
     loop = g_main_loop_new (NULL, FALSE);
     conn = dbus_g_bus_get (DBUS_BUS_SESSION, &error);
     proxy = dbus_g_proxy_new_for_name (conn, MEDIA_KEY_OBJECT_NAME, MEDIA_KEY_OBJECT_PATH, MEDIA_KEY_OBJECT_IFACE);
@@ -80,53 +103,25 @@ media_key_thread (void *ctx) {
     dbus_g_proxy_connect_signal(proxy, "MediaPlayerKeyPressed", G_CALLBACK(media_key_pressed), NULL, NULL);
 
     g_print("Starting media key listener\n");
-    mk_state = 0;
-    //deadbeef->cond_signal(mk_cond);
-    //deadbeef->mutex_unlock(mk_mutex);
     g_main_loop_run (loop);
-
-
-
-on_failed:
-    mk_state = -1;
-    deadbeef->cond_signal(mk_cond);
-    deadbeef->mutex_unlock(mk_mutex);
-    return;
-
 }
 
 static int
 media_key_start (void) {
-    mk_mutex = deadbeef->mutex_create ();
+    mk_mutex = deadbeef->mutex_create_nonrecursive ();
     mk_cond = deadbeef->cond_create ();
 
     if (mk_mutex == 0 || mk_cond == 0)
         goto failed_cleanup;
 
-    //deadbeef->mutex_lock (mk_mutex);
     int tid = deadbeef->thread_start(media_key_thread, NULL);
     if (tid == 0) {
-        deadbeef->mutex_unlock (mk_mutex);
         goto failed_cleanup;
     }
 
-    //deadbeef->cond_wait (mk_cond, mk_mutex);
-    //deadbeef->mutex_unlock (mk_mutex);
-
-    if (mk_state == 0)
-        return 0;
-    /* else failed */
+    return 0;
 
 failed_cleanup:
-
-    if (mk_mutex)
-        deadbeef->mutex_free(mk_mutex);
-
-    if (mk_cond)
-        deadbeef->cond_free(mk_cond);
-
-    if (tid)
-        deadbeef->thread_join(tid);
 
     return -1;
 }
@@ -165,6 +160,7 @@ static DB_misc_t plugin = {
     .plugin.website = "http://github.com/thynson/deadbeef",
     .plugin.start = media_key_start,
     .plugin.stop = media_key_stop,
+    .plugin.message = on_message,
 };
 
 DB_plugin_t *
