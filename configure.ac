@@ -198,6 +198,14 @@ else
     PKG_CHECK_MODULES(DBUS_DEPS, dbus-1, HAVE_DBUS=yes, HAVE_DBUS=no)
 fi
 
+if test "x$enable_media_key" != "xno" ; then
+    PKG_CHECK_MODULES(DBUS_GLIB_DEPS, dbus-glib-1, HAVE_MEDIA_KEY=yes, HAVE_MEDIA_KEY=no);
+    MEDIA_KEY_CFLAGS=`pkg-config --cflags dbus-glib-1`
+    MEDIA_KEY_LIBS=`pkg-config --libs dbus-glib-1`
+    AC_SUBST(MEDIA_KEY_CFLAGS)
+    AC_SUBST(MEDIA_KEY_LIBS)
+fi
+
 if test "x$enable_pulse" != "xno" ; then
     PKG_CHECK_MODULES(PULSE_DEPS, libpulse-simple, HAVE_PULSE=yes, HAVE_PULSE=no)
 fi
