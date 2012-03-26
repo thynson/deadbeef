@@ -199,9 +199,9 @@ else
 fi
 
 if test "x$enable_media_key" != "xno" ; then
-    PKG_CHECK_MODULES(DBUS_GLIB_DEPS, dbus-glib-1, HAVE_MEDIA_KEY=yes, HAVE_MEDIA_KEY=no);
-    MEDIA_KEY_CFLAGS=`pkg-config --cflags dbus-glib-1`
-    MEDIA_KEY_LIBS=`pkg-config --libs dbus-glib-1`
+    PKG_CHECK_MODULES(GLIB_DEPS, gio-2.0, HAVE_MEDIA_KEY=yes, HAVE_MEDIA_KEY=no);
+    MEDIA_KEY_CFLAGS=`pkg-config --cflags gio-2.0`
+    MEDIA_KEY_LIBS=`pkg-config --libs gio-2.0`
     AC_SUBST(MEDIA_KEY_CFLAGS)
     AC_SUBST(MEDIA_KEY_LIBS)
 fi

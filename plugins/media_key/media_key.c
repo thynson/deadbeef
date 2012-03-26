@@ -16,10 +16,8 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-#include <dbus/dbus.h>
-#include <dbus/dbus-glib.h>
+#include <gio/gio.h>
 #include <glib.h>
-#include "marshal.h"
 #include "../../deadbeef.h"
 #include <string.h>
 
@@ -34,7 +32,6 @@ static int mk_state = DB_EV_STOP;
 
 static int
 on_message (uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2) {
-    fprintf (stderr, "%d\n", id);
     deadbeef->mutex_lock (mk_mutex);
     switch (id) {
     case DB_EV_PLAY_CURRENT:
@@ -53,22 +50,24 @@ on_message (uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2) {
 }
 
 static void
-media_key_pressed (DBusGProxy *proxy, const char *value1, const char *value2) {
-    fprintf (stderr, "%s\n", value2);
+on_media_key_pressed (GDBusProxy *proxy, const gchar *sender, const gchar *signal_name, GVariant *var, gpointer data) {
+
+    const gchar *app, *action;
+    g_variant_get(var, "(&s&s)", &app, &action);
     deadbeef->mutex_lock (mk_mutex);
-    if (strcmp (value2, "Play") == 0) {
+    if (strcmp (action, "Play") == 0) {
         if (mk_state == DB_EV_STOP)
             deadbeef->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
         else
             deadbeef->sendmessage(DB_EV_TOGGLE_PAUSE, 0, 0, 0);
     }
-    else if (strcmp (value2, "Stop") == 0) {
+    else if (strcmp (action, "Stop") == 0) {
         deadbeef->sendmessage(DB_EV_STOP, 0, 0, 0);
     }
-    else if (strcmp (value2, "Next") == 0) {
+    else if (strcmp (action, "Next") == 0) {
         deadbeef->sendmessage(DB_EV_NEXT, 0, 0, 0);
     }
-    else if (strcmp (value2, "Previous") == 0) {
+    else if (strcmp (action, "Previous") == 0) {
         deadbeef->sendmessage(DB_EV_PREV, 0, 0, 0);
     }
     deadbeef->mutex_unlock (mk_mutex);
@@ -78,32 +77,33 @@ static void
 media_key_thread (void *ctx) {
     GError *error;
     GMainLoop *loop;
-    DBusGConnection *conn;
-    DBusGProxy *proxy;
+    GMainContext *context;
+    //GDBusConnection *conn;
+    GDBusProxy *proxy;
+    GVariant *var = g_variant_new ("(su)", "deadbeef", 0);
 
     g_type_init ();
 
-    loop = g_main_loop_new (NULL, FALSE);
-    conn = dbus_g_bus_get (DBUS_BUS_SESSION, &error);
-    proxy = dbus_g_proxy_new_for_name (conn, MEDIA_KEY_OBJECT_NAME, MEDIA_KEY_OBJECT_PATH, MEDIA_KEY_OBJECT_IFACE);
+    g_thread_init (NULL);
+
+    proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION, G_DBUS_PROXY_FLAGS_NONE, NULL, MEDIA_KEY_OBJECT_NAME, MEDIA_KEY_OBJECT_PATH, MEDIA_KEY_OBJECT_IFACE, NULL, &error);
 
     if(!proxy) {
         g_printerr("Could not create proxy object\n");
     }
 
     error = NULL;
-    if(!dbus_g_proxy_call(proxy, "GrabMediaPlayerKeys", &error, G_TYPE_STRING, "deadbeef", G_TYPE_UINT, 0, G_TYPE_INVALID, G_TYPE_INVALID)) {
-        g_printerr("Could not grab media player keys: %s\n", error->message);
-    }
 
-    dbus_g_object_register_marshaller (marshal_VOID__STRING_STRING, G_TYPE_NONE, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INVALID);
+    g_dbus_proxy_call_sync(proxy, "GrabMediaPlayerKeys", var,
+                G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
 
-    dbus_g_proxy_add_signal(proxy, "MediaPlayerKeyPressed", G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INVALID);
+    g_signal_connect(proxy, "g-signal", G_CALLBACK(on_media_key_pressed), NULL);
 
-    dbus_g_proxy_connect_signal(proxy, "MediaPlayerKeyPressed", G_CALLBACK(media_key_pressed), NULL, NULL);
+    g_printerr("Starting media key listener\n");
 
-    g_print("Starting media key listener\n");
+    loop = g_main_loop_new (NULL, FALSE);
     g_main_loop_run (loop);
+    g_main_loop_unref (loop);
 }
 
 static int
