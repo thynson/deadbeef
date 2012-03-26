@@ -378,6 +378,7 @@ redraw_queued_tracks_cb (gpointer plt) {
 void
 gtkpl_songchanged_wrapper (DB_playItem_t *from, DB_playItem_t *to) {
     struct fromto_t *ft = malloc (sizeof (struct fromto_t));
+    GdkWindow *window = gtk_widget_get_window (searchwin);
     ft->from = from;
     ft->to = to;
     if (from) {
@@ -388,8 +389,8 @@ gtkpl_songchanged_wrapper (DB_playItem_t *from, DB_playItem_t *to) {
     }
     g_idle_add (update_win_title_idle, ft);
     g_idle_add (redraw_seekbar_cb, NULL);
-    if (searchwin && GTK_WINDOW(searchwin)) {
-        int iconified = gdk_window_get_state(GTK_WINDOW(searchwin)) & GDK_WINDOW_STATE_ICONIFIED;
+    if (searchwin && window) {
+        int iconified = gdk_window_get_state(window) & GDK_WINDOW_STATE_ICONIFIED;
         if (gtk_widget_get_visible (searchwin) && !iconified) {
             g_idle_add (redraw_queued_tracks_cb, DDB_LISTVIEW (lookup_widget (searchwin, "searchlist")));
         }
