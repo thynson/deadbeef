@@ -6,12 +6,12 @@
     modify it under the terms of the GNU General Public License
     as published by the Free Software Foundation; either version 2
     of the License, or (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -378,6 +378,7 @@ redraw_queued_tracks_cb (gpointer plt) {
 void
 gtkpl_songchanged_wrapper (DB_playItem_t *from, DB_playItem_t *to) {
     struct fromto_t *ft = malloc (sizeof (struct fromto_t));
+    GdkWindow *window = gtk_widget_get_window (searchwin);
     ft->from = from;
     ft->to = to;
     if (from) {
@@ -388,8 +389,8 @@ gtkpl_songchanged_wrapper (DB_playItem_t *from, DB_playItem_t *to) {
     }
     g_idle_add (update_win_title_idle, ft);
     g_idle_add (redraw_seekbar_cb, NULL);
-    if (searchwin && searchwin->window) {
-        int iconified = gdk_window_get_state(searchwin->window) & GDK_WINDOW_STATE_ICONIFIED;
+    if (searchwin && window) {
+        int iconified = gdk_window_get_state(window) & GDK_WINDOW_STATE_ICONIFIED;
         if (gtk_widget_get_visible (searchwin) && !iconified) {
             g_idle_add (redraw_queued_tracks_cb, DDB_LISTVIEW (lookup_widget (searchwin, "searchlist")));
         }
@@ -761,7 +762,7 @@ on_playlist_load_activate              (GtkMenuItem     *menuitem,
     gtk_file_filter_set_name (flt, _("Other files (*)"));
     gtk_file_filter_add_pattern (flt, "*");
     gtk_file_chooser_add_filter (GTK_FILE_CHOOSER (dlg), flt);
-    
+
     int res = gtk_dialog_run (GTK_DIALOG (dlg));
     // store folder
     gchar *folder = gtk_file_chooser_get_current_folder_uri (GTK_FILE_CHOOSER (dlg));
@@ -1358,7 +1359,7 @@ static ddb_gtkui_t plugin = {
 #endif
     .gui.plugin.name = "Standard GTK2 user interface",
     .gui.plugin.descr = "Default DeaDBeeF GUI",
-    .gui.plugin.copyright = 
+    .gui.plugin.copyright =
         "Copyright (C) 2009-2011 Alexey Yakovenko <waker@users.sourceforge.net>\n"
         "\n"
         "This program is free software; you can redistribute it and/or\n"

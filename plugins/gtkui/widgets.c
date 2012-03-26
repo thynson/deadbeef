@@ -6,12 +6,12 @@
     modify it under the terms of the GNU General Public License
     as published by the Free Software Foundation; either version 2
     of the License, or (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -235,6 +235,7 @@ w_create_from_string (const char *s, ddb_gtkui_widget_t **parent) {
 static ddb_gtkui_widget_t *current_widget;
 static int hidden = 0;
 
+#if !GTK_CHECK_VERSION(3,0,0)
 gboolean
 w_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
     if (hidden && user_data == current_widget) {
@@ -257,6 +258,26 @@ w_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
 
     return FALSE;
 }
+#else
+static gboolean
+w_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+    if (hidden && user_data == current_widget) {
+        GdkRGBA clr = {
+            .red = 0.17,
+            .green = 0.0,
+            .blue = 0.83,
+            .alpha = 0
+        };
+        GtkAllocation allocation;
+        gtk_widget_get_allocation(widget, &allocation);
+        cairo_rectangle (cr, 0, 0, allocation.width, allocation.height);
+
+    }
+    return FALSE;
+}
+
+#endif
+
 
 static char paste_buffer[1000];
 
@@ -435,7 +456,7 @@ w_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_da
         g_signal_connect ((gpointer) item, "activate",
                 G_CALLBACK (on_delete_activate),
                 NULL);
-        
+
         item = gtk_menu_item_new_with_mnemonic (_("Cut"));
         gtk_widget_show (item);
         gtk_container_add (GTK_CONTAINER (menu), item);
@@ -469,7 +490,11 @@ w_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_da
 static void
 w_override_signals (GtkWidget *widget, gpointer user_data) {
     g_signal_connect ((gpointer) widget, "button_press_event", G_CALLBACK (w_button_press_event), user_data);
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) widget, "expose_event", G_CALLBACK (w_expose_event), user_data);
+#else
+    g_signal_connect ((gpointer) widget, "draw", G_CALLBACK (w_draw_event), user_data);
+#endif
     if (GTK_IS_CONTAINER (widget)) {
         gtk_container_forall (GTK_CONTAINER (widget), w_override_signals, user_data);
     }
@@ -555,6 +580,7 @@ w_container_remove (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child) {
 
 ////// placeholder widget
 
+#if !GTK_CHECK_VERSION(3,0,0)
 gboolean
 w_placeholder_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
     cairo_t *cr = gdk_cairo_create (widget->window);
@@ -587,6 +613,42 @@ w_placeholder_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer u
     cairo_destroy (cr);
     return FALSE;
 }
+#else
+static gboolean
+w_placeholder_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+    GtkAllocation allocation;
+
+    gtk_widget_get_allocation (widget, &allocation);
+    cairo_set_source_rgb (cr, 255, 0, 0);
+    cairo_surface_t *checker;
+    cairo_t *cr2;
+
+    checker = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 12, 12);
+    cr2 = cairo_create (checker);
+
+    cairo_set_source_rgb (cr2, 0.5, 0.5 ,0.5);
+    cairo_paint (cr2);
+    cairo_set_source_rgb (cr2, 0, 0, 0);
+    cairo_move_to (cr2, 0, 0);
+    cairo_line_to (cr2, 12, 12);
+    cairo_move_to (cr2, 1, 12);
+    cairo_line_to (cr2, 12, 1);
+    cairo_set_line_width (cr2, 1);
+    cairo_set_antialias (cr2, CAIRO_ANTIALIAS_NONE);
+    cairo_stroke (cr2);
+    cairo_fill (cr2);
+    cairo_destroy (cr2);
+
+    cairo_set_source_surface (cr, checker, 0, 0);
+    cairo_pattern_t *pt = cairo_get_source(cr);
+    cairo_pattern_set_extend (pt, CAIRO_EXTEND_REPEAT);
+    cairo_rectangle (cr, 0, 0, allocation.width, allocation.height);
+    cairo_paint (cr);
+    cairo_surface_destroy (checker);
+    return FALSE;
+}
+
+#endif
 
 ddb_gtkui_widget_t *
 w_placeholder_create (void) {
@@ -594,8 +656,13 @@ w_placeholder_create (void) {
     memset (w, 0, sizeof (w_placeholder_t));
     w->base.widget = gtk_drawing_area_new ();
     gtk_widget_set_events (w->base.widget, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
     g_signal_connect_after ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_placeholder_expose_event), w);
+#else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
+    g_signal_connect_after ((gpointer) w->base.widget, "draw", G_CALLBACK (w_placeholder_draw_event), w);
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
     return (ddb_gtkui_widget_t*)w;
 }
@@ -643,7 +710,11 @@ w_vsplitter_create (void) {
     ddb_gtkui_widget_t *ph1, *ph2;
     ph1 = w_create ("placeholder");
     ph2 = w_create ("placeholder");
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
+#else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
     w_append ((ddb_gtkui_widget_t*)w, ph1);
@@ -666,7 +737,11 @@ w_hsplitter_create (void) {
     ddb_gtkui_widget_t *ph1, *ph2;
     ph1 = w_create ("placeholder");
     ph2 = w_create ("placeholder");
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
+#else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
     w_append ((ddb_gtkui_widget_t*)w, ph1);
@@ -703,8 +778,7 @@ on_add_tab_activate (GtkMenuItem *menuitem, gpointer user_data) {
     int i = 0;
     for (ddb_gtkui_widget_t *c = w->base.children; c; c = c->next, i++);
     w->clicked_page = i-1;
-    gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
-
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
 }
 
 static void
@@ -755,7 +829,7 @@ on_move_tab_left_activate (GtkMenuItem *menuitem, gpointer user_data) {
             gtk_widget_show (newchild->widget);
 
             gtk_notebook_insert_page (GTK_NOTEBOOK (w->base.widget), newchild->widget, eventbox, w->clicked_page-1);
-            gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page-1);
+            gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page-1);
             w->clicked_page--;
             break;
         }
@@ -772,9 +846,9 @@ on_move_tab_right_activate (GtkMenuItem *menuitem, gpointer user_data) {
     if (w->clicked_page >= i)
         return;
 
-    gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
     on_move_tab_left_activate (menuitem, user_data);
-    gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
+    gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), ++w->clicked_page);
 }
 
 static gboolean
@@ -788,7 +862,7 @@ tab_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_
         GtkWidget *menu;
         GtkWidget *item;
         menu = gtk_menu_new ();
- 
+
         item = gtk_menu_item_new_with_mnemonic (_("Move tab left"));
         gtk_widget_show (item);
         gtk_container_add (GTK_CONTAINER (menu), item);
@@ -815,7 +889,7 @@ tab_button_press_event (GtkWidget *widget, GdkEventButton *event, gpointer user_
         gtk_container_add (GTK_CONTAINER (menu), item);
 
         w->clicked_page = gtk_notebook_page_num (GTK_NOTEBOOK (w->base.widget), user_data);
-        gtk_notebook_set_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
+        gtk_notebook_set_current_page (GTK_NOTEBOOK (w->base.widget), w->clicked_page);
 
         gtk_menu_popup (GTK_MENU (menu), NULL, NULL, NULL, widget, 0, gtk_get_current_event_time());
         return TRUE;
@@ -862,7 +936,7 @@ w_tabs_replace (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child, ddb_gtkui_w
             gtk_container_add (GTK_CONTAINER (eventbox), label);
             gtk_widget_show (newchild->widget);
             int pos = gtk_notebook_insert_page (GTK_NOTEBOOK (cont->widget), newchild->widget, eventbox, ntab);
-            gtk_notebook_set_page (GTK_NOTEBOOK (cont->widget), pos);
+            gtk_notebook_set_current_page (GTK_NOTEBOOK (cont->widget), pos);
             break;
         }
     }
@@ -894,7 +968,11 @@ w_tabs_create (void) {
     ph2 = w_create ("placeholder");
     ph3 = w_create ("placeholder");
 
+#if !GTK_CHECK_VERSION(3,0,0)
     g_signal_connect ((gpointer) w->base.widget, "expose_event", G_CALLBACK (w_expose_event), w);
+#else
+    g_signal_connect ((gpointer) w->base.widget, "draw", G_CALLBACK (w_draw_event), w);
+#endif
     g_signal_connect ((gpointer) w->base.widget, "button_press_event", G_CALLBACK (w_button_press_event), w);
 
     w_append ((ddb_gtkui_widget_t*)w, ph1);
@@ -913,7 +991,7 @@ w_box_create (void) {
     w_box_t *w = malloc (sizeof (w_box_t));
     memset (w, 0, sizeof (w_box_t));
     w->base.widget = gtk_vbox_new (FALSE, 0);
-    w->base.append = w_container_add; 
+    w->base.append = w_container_add;
     w->base.remove = w_container_remove;
 
     return (ddb_gtkui_widget_t*)w;
@@ -1118,8 +1196,13 @@ w_tabbed_playlist_create (void) {
 
     gtk_box_pack_start (GTK_BOX (vbox), tabstrip, FALSE, TRUE, 0);
     gtk_widget_set_size_request (tabstrip, -1, 24);
+#if GTK_CHECK_VERSION(3,0,0)
+    gtk_widget_set_can_focus (tabstrip, TRUE);
+    gtk_widget_set_can_default (tabstrip, TRUE);
+#else
     GTK_WIDGET_UNSET_FLAGS (tabstrip, GTK_CAN_FOCUS);
     GTK_WIDGET_UNSET_FLAGS (tabstrip, GTK_CAN_DEFAULT);
+#endif
 
     gtk_box_pack_start (GTK_BOX (vbox), frame, TRUE, TRUE, 0);
     gtk_container_set_border_width (GTK_CONTAINER (frame), 1);
@@ -1257,6 +1340,7 @@ coverart_avail_callback (void *user_data) {
     gtk_widget_queue_draw (w->drawarea);
 }
 
+#if !GTK_CHECK_VERSION(3,0,0)
 static gboolean
 coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_data) {
     DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
@@ -1280,6 +1364,35 @@ coverart_expose_event (GtkWidget *widget, GdkEventExpose *event, gpointer user_d
     deadbeef->pl_item_unref (it);
     return TRUE;
 }
+#else
+
+static gboolean
+coverart_draw_event (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+    DB_playItem_t *it = deadbeef->streamer_get_playing_track ();
+    GtkAllocation allocation;
+    if (!it) {
+        return FALSE;
+    }
+    gtk_widget_get_allocation (widget, &allocation);
+    const char *album = deadbeef->pl_find_meta (it, "album");
+    const char *artist = deadbeef->pl_find_meta (it, "artist");
+
+    if (!album || !*album) {
+        album = deadbeef->pl_find_meta(it, "title");
+    }
+
+    GdkPixbuf *pixbuf = get_cover_art_callb (deadbeef->pl_find_meta ((it), ":URI"), artist, album, min(allocation.width, allocation.height), coverart_avail_callback, user_data);
+    if (pixbuf) {
+        int pw = gdk_pixbuf_get_width (pixbuf);
+        int ph = gdk_pixbuf_get_height (pixbuf);
+        gdk_cairo_set_source_pixbuf (cr, pixbuf, 0, 0);
+        cairo_paint (cr);
+        g_object_unref (pixbuf);
+    }
+    deadbeef->pl_item_unref (it);
+    return TRUE;
+}
+#endif
 
 static gboolean
 coverart_redraw_cb (void *user_data) {
@@ -1318,7 +1431,12 @@ w_coverart_create (void) {
     w->drawarea = gtk_drawing_area_new ();
     gtk_widget_show (w->drawarea);
     gtk_container_add (GTK_CONTAINER (w->base.widget), w->drawarea);
+#if !GTK_CHECK_VERSION(3,0,0)
+    // Hotfix for porting to gtk3
     g_signal_connect_after ((gpointer) w->drawarea, "expose_event", G_CALLBACK (coverart_expose_event), w);
+#else
+    g_signal_connect_after ((gpointer) w->drawarea, "draw", G_CALLBACK (coverart_draw_event), w);
+#endif
     w_override_signals (w->base.widget, w);
     return (ddb_gtkui_widget_t *)w;
 }
