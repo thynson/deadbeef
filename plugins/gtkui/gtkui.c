@@ -71,7 +71,7 @@ GtkWidget *theme_button;
 
 int gtkui_embolden_current_track;
 
-#define TRAY_ICON "deadbeef-tray-icon"
+#define TRAY_ICON "deadbeef_tray_icon"
 
 // that must be called before gtk_init
 void
@@ -1042,6 +1042,7 @@ gtkui_thread (void *ctx) {
         gtk_window_set_icon_name (GTK_WINDOW (mainwin), "deadbeef");
     }
     else {
+        // try loading icon from $prefix/deadbeef.png (for static build)
         char iconpath[1024];
         snprintf (iconpath, sizeof (iconpath), "%s/deadbeef.png", deadbeef->get_prefix ());
         gtk_window_set_icon_from_file (GTK_WINDOW (mainwin), iconpath, NULL);
@@ -1292,6 +1293,14 @@ gtkui_connect (void) {
     return 0;
 }
 
+static int
+gtkui_disconnect (void) {
+    supereq_plugin = NULL;
+    coverart_plugin = NULL;
+
+    return 0;
+}
+
 
 static gboolean
 quit_gtk_cb (gpointer nothing) {
@@ -1305,6 +1314,11 @@ gtkui_stop (void) {
         coverart_plugin->plugin.plugin.stop ();
         coverart_plugin = NULL;
     }
+    if (last_it) {
+        deadbeef->pl_item_unref (last_it);
+    }
+    trace ("save widget data\n");
+    w_save();
     trace ("quitting gtk\n");
     g_idle_add (quit_gtk_cb, NULL);
     trace ("waiting for gtk thread to finish\n");
@@ -1354,8 +1368,12 @@ static ddb_gtkui_t plugin = {
     .gui.plugin.type = DB_PLUGIN_MISC,
 #if GTK_CHECK_VERSION(3,0,0)
     .gui.plugin.id = "gtkui3",
+    .gui.plugin.name = "GTK3 user interface",
+    .gui.plugin.descr = "User interface using GTK+ 3.x",
 #else
     .gui.plugin.id = "gtkui",
+    .gui.plugin.name = "GTK2 user interface",
+    .gui.plugin.descr = "User interface using GTK+ 2.x",
 #endif
     .gui.plugin.name = "Standard GTK2 user interface",
     .gui.plugin.descr = "Default DeaDBeeF GUI",
@@ -1380,6 +1398,7 @@ static ddb_gtkui_t plugin = {
     .gui.plugin.start = gtkui_start,
     .gui.plugin.stop = gtkui_stop,
     .gui.plugin.connect = gtkui_connect,
+    .gui.plugin.disconnect = gtkui_disconnect,
     .gui.plugin.configdialog = settings_dlg,
     .gui.plugin.message = gtkui_message,
     .gui.run_dialog = gtkui_run_dialog_root,

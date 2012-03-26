@@ -21,6 +21,8 @@
 
 #include "gtkui_api.h"
 
+extern DB_playItem_t *last_it;
+
 void
 w_init (void);
 
@@ -53,6 +55,9 @@ w_append (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child);
 
 void
 w_remove (ddb_gtkui_widget_t *cont, ddb_gtkui_widget_t *child);
+
+void
+w_save (void);
 
 ddb_gtkui_widget_t *
 w_hsplitter_create (void);
