@@ -74,11 +74,10 @@ on_media_key_pressed (GDBusProxy *proxy, const gchar *sender, const gchar *signa
 }
 
 static void
-media_key_thread (void *ctx) {
+gnome_media_key_thread (void *ctx) {
     GError *error;
     GMainLoop *loop;
     GMainContext *context;
-    //GDBusConnection *conn;
     GDBusProxy *proxy;
     GVariant *var = g_variant_new ("(su)", "deadbeef", 0);
 
@@ -107,14 +106,14 @@ media_key_thread (void *ctx) {
 }
 
 static int
-media_key_start (void) {
+gnome_media_key_start (void) {
     mk_mutex = deadbeef->mutex_create_nonrecursive ();
     mk_cond = deadbeef->cond_create ();
 
     if (mk_mutex == 0 || mk_cond == 0)
         goto failed_cleanup;
 
-    int tid = deadbeef->thread_start(media_key_thread, NULL);
+    int tid = deadbeef->thread_start(gnome_media_key_thread, NULL);
     if (tid == 0) {
         goto failed_cleanup;
     }
@@ -127,7 +126,7 @@ failed_cleanup:
 }
 
 static int
-media_key_stop (void) {
+gnome_media_key_stop (void) {
     return 0;
 }
 
@@ -137,9 +136,9 @@ static DB_misc_t plugin = {
     .plugin.type = DB_PLUGIN_MISC,
     .plugin.version_major = 1,
     .plugin.version_minor = 0,
-    .plugin.id = "media_key",
-    .plugin.name = "Media keys",
-    .plugin.descr = "Handling DBus media key events",
+    .plugin.id = "gnome_media_key",
+    .plugin.name = "GNOME Media Keys",
+    .plugin.descr = "Handling GNOME media key events",
     .plugin.copyright =
         "Copyright (C) 2011 Thynson <lanxingcan@gmail.com>\n"
         "\n"
@@ -158,13 +157,13 @@ static DB_misc_t plugin = {
         "Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.\n"
     ,
     .plugin.website = "http://github.com/thynson/deadbeef",
-    .plugin.start = media_key_start,
-    .plugin.stop = media_key_stop,
+    .plugin.start = gnome_media_key_start,
+    .plugin.stop = gnome_media_key_stop,
     .plugin.message = on_message,
 };
 
 DB_plugin_t *
-media_key_load (DB_functions_t *ddb) {
+gnome_media_key_load (DB_functions_t *ddb) {
     deadbeef = ddb;
     return &plugin.plugin;
 }
